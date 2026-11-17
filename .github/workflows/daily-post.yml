@@ -1,0 +1,72 @@
+name: daily-social-post
+
+on:
+  schedule:
+    - cron: '20 0 * * *'   # 매일 09:20 KST (UTC 00:20). GitHub 예약 지연을 감안해 일찍 시작하고, 게시 스크립트가 10:00 KST까지 대기한 뒤 올린다.
+  workflow_dispatch:
+    inputs:
+      day:
+        description: '날짜 YYYY-MM-DD (비우면 오늘 KST)'
+        required: false
+        default: ''
+      publish:
+        description: '실제로 인스타에 게시할지 (true/false). false면 이미지만 생성해서 레포에 커밋'
+        required: false
+        default: 'false'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-post
+  cancel-in-progress: false
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+
+      - name: 이미지·캡션 생성
+        env:
+          DAY: ${{ inputs.day }}
+        run: node src/run.mjs generate
+
+      - name: 생성물 커밋 (공개 이미지 URL용)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add posts
+          git diff --cached --quiet || git commit -m "posts: generated"
+          git pull --rebase
+          git push
+
+      - name: 인스타 게시
+        env:
+          DAY: ${{ inputs.day }}
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
+          REPO: ${{ github.repository }}
+          BRANCH: ${{ github.ref_name }}
+          # 수동 실행: 입력값 publish=true 일 때만. 예약 실행: 저장소 변수 AUTOPOST_ENABLED=true 일 때만.
+          PUBLISH: ${{ (github.event_name == 'workflow_dispatch' && inputs.publish == 'true') || (github.event_name == 'schedule' && vars.AUTOPOST_ENABLED == 'true') }}
+        run: node src/run.mjs publish
+
+      - name: 게시 기록 커밋
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add posts
+          git diff --cached --quiet || git commit -m "posts: record"
+          git pull --rebase
+          git push
