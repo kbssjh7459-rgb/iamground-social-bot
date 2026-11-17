@@ -51,6 +51,15 @@ if (cmd === 'publish') {
   const { IG_ACCESS_TOKEN: T, IG_USER_ID: ID, REPO, BRANCH } = process.env;
   if (!T || !ID || !REPO) { console.error('IG_ACCESS_TOKEN / IG_USER_ID / REPO 필요'); process.exit(1); }
 
+  // 사전 점검: 토큰 권한/만료 확인 (토큰 값은 출력하지 않음)
+  const dbg = await (await fetch(`https://graph.facebook.com/v21.0/debug_token?${new URLSearchParams({ input_token: T, access_token: T })}`)).json();
+  if (dbg.error || !dbg.data) { console.error('토큰 점검 실패:', dbg.error?.message || '알 수 없음'); process.exit(1); }
+  const scopes = dbg.data.scopes || [];
+  console.log('토큰 유형:', dbg.data.type, '| 유효:', dbg.data.is_valid, '| 만료:', dbg.data.expires_at ? new Date(dbg.data.expires_at * 1000).toISOString() : '무기한');
+  console.log('토큰 권한:', scopes.join(', '));
+  const need = ['instagram_basic', 'instagram_content_publish'].filter((s) => !scopes.includes(s));
+  if (!dbg.data.is_valid || need.length) { console.error('토큰에 필요한 권한이 없음: ' + need.join(', ') + ' → 시스템 사용자에서 토큰을 다시 발급해 IG_ACCESS_TOKEN 시크릿을 교체하세요'); process.exit(1); }
+
   // 오전 10:00(KST)까지 대기 (예약 실행이 일찍 시작된 경우). 최대 50분.
   const target = new Date(`${DAY}T10:00:00+09:00`).getTime();
   const waitMs = Math.min(target - Date.now(), 50 * 60e3);
