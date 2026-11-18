@@ -60,9 +60,9 @@ if (cmd === 'publish') {
   const need = ['instagram_basic', 'instagram_content_publish'].filter((s) => !scopes.includes(s));
   if (!dbg.data.is_valid || need.length) { console.error('토큰에 필요한 권한이 없음: ' + need.join(', ') + ' → 시스템 사용자에서 토큰을 다시 발급해 IG_ACCESS_TOKEN 시크릿을 교체하세요'); process.exit(1); }
 
-  // 오전 10:00(KST)까지 대기 (예약 실행이 일찍 시작된 경우). 최대 50분.
+  // 오전 10:00(KST)까지 대기 (예약 실행이 일찍 시작된 경우). 최대 85분.
   const target = new Date(`${DAY}T10:00:00+09:00`).getTime();
-  const waitMs = Math.min(target - Date.now(), 50 * 60e3);
+  const waitMs = Math.min(target - Date.now(), 85 * 60e3);
   if (waitMs > 0) { console.log(`10:00 KST까지 ${Math.round(waitMs / 1000)}초 대기`); await new Promise((r) => setTimeout(r, waitMs)); }
 
   const base = `https://raw.githubusercontent.com/${REPO}/${BRANCH || 'main'}/posts/${DAY}`;
